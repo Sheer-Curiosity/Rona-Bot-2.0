@@ -1,100 +1,117 @@
-const { prefix, token } = require('./config.json');
-const fs = require('fs');
-const pfpScript = require('./pfp-roulette/pfp-roulette.js');
-const fukkireta = require('./EasterEgg/fukkireta.js');
-const utility = require('./scripts/grabid.js');
-const ytPlayer = require('./scripts/playfromyoutube.js');
-const apexTracker = require('./scripts/apexStatTrack.js');
+/* eslint-disable consistent-return */
+/* eslint-disable max-len */
+/* eslint-disable no-console */
+// Imports
 const Discord = require('discord.js');
-const client = new Discord.Client();
-var playing = false; //Used to prevent songs from being overlapped
-global.globalPlaying = playing;
-global.client = client; 
+const mongoose = require('mongoose');
 
-client.login(token);
-client.once('ready', () => {
-	console.log('Ready!');
-	currentActivity = `TESTING`
-	client.user.setActivity(currentActivity);
+// Config
+const config = require('./config.json');
+
+// Pre-Init
+const database = mongoose.createConnection(`mongodb+srv://${config.mongoDb.username}:${config.mongoDb.password}@${config.mongoDb.host}/${config.mongoDb.database}`, {
+	useNewUrlParser: true,
+	useUnifiedTopology: true,
+	useFindAndModify: false,
+});
+exports.database = database;
+
+const client = new Discord.Client({
+	partials: ['GUILD_MEMBER', 'MESSAGE', 'REACTION'],
+	intents: ['GUILDS', 'GUILD_INTEGRATIONS', 'GUILD_MESSAGES', 'GUILD_MESSAGE_REACTIONS'],
+});
+exports.client = client;
+
+// Models
+const Poll = require('./models/Poll.js');
+
+// Init
+client.on('ready', () => {
+	client.user.setActivity('VIVA HAPPY! - Yozora Mel cover', { type: 'LISTENING' });
+	console.log('READY');
 });
 
-/* In theory I could streamline all these assorted functions by making
-one "on message" event here and exporting the message variable to each
-of the functions. Gonna leave this here because I might do that in the
-future */
-
-apexTracker.apexGrabInfo();
-
-pfpScript.pfpRoulette(); //command for changing the bot's PFP
-
-//YT Video Player
-ytPlayer.ytPlay();
-ytPlayer.ytLoop();
-
-//Hololive songs easter egg(s)
-fukkireta.globalInterruptPlay();
-fukkireta.playFukkireta();
-fukkireta.playAlien();
-fukkireta.playAhoy();
-
-function grabId(mention) {  //couldn't figure out how to put this in a seperate file, so here it is in the main file.
-	if (!mention) return;
-	
-    if (mention.startsWith('<@') && mention.endsWith('>')) {
-		mention = mention.slice(2, -1);
-		if (mention.startsWith('!')) {
-			mention = mention.slice(1);
-		}
-        return client.users.cache.get(mention);
-    }
-    else {
-        return client.users.cache.get(mention);
-    }
-}
-
-client.on('message', async message => {
-if (!message.content.startsWith(prefix) || message.author.bot || message.guild === null) return;
-
-const withoutPrefix = message.content.slice(prefix.length);
-const split = withoutPrefix.split(/ +/);
-const command = split[0];
-const args = split.slice(1);
-
-switch (command) {
-	case 'mute':
-		if (message.member.roles.cache.some(role => role.name === 'Admin boi', 'Bippity Boppity This servers my property') === false) return;
-		const user = grabId(args[0]);
-	
-		if (!user) {
-			console.log(user);
-			return message.channel.send('Invalid Syntax');
-		}
-		if (message.guild.member(user).roles.cache.some(role => role.name === 'Admin boi') === true) {
-			return message.channel.send('You Cannot Mute A Fellow Admin or Yourself');
-		}
-		if (message.guild.member(user).voice.channel === null) {
-			return message.channel.send('User Is Not In A Voice Channel');
-		}
-		if (message.guild.member(user).voice.channel != null) {
-			message.guild.member(user).voice.setChannel('760711348391903253');
-			client.user.setActivity('Beating The Prisoner');
-		}
-		else {
-			message.channel.send('An unknown error has occured.')
-		}
-		break;
-	case 'user':
-		if (message.member.roles.cache.some(role => role.name === 'Admin boi') === false) return;
-		message.channel.send('null');
-		break;
-	case 'unmute':
-		if (message.member.roles.cache.some(role => role.name === 'Admin boi') === false) return;
-		client.user.setActivity(currentActivity);
-		break;
-	case `bri'ish`:
-		message.channel.send("Blimey mate, 'least I don't get shot while dewin maffs in skewl, plus you Americans don't even got free 'elfcare... pretty schtewpid innit?");
-		break;
-}
+database.on('open', () => {
+	console.log('Connected to database');
 });
-client.on('error', console.error);
 
+// Command Handler
+client.on('message', (message) => {
+	if (message.author.bot) return;
+	if (message.content.startsWith(config.discord.devPrefix)) {
+		if (message.author.id !== '433816530862604291') {
+			return message.reply('You do not have permission to use this command.');
+		}
+		const cont = message.content.slice(config.discord.devPrefix.length).split(' ');
+
+		if (cont[0] === 'initSlashCommands') {
+			client.api.applications(client.user.id).guilds(message.guild.id).commands.post({
+				data: {
+					name: 'testdb',
+					description: 'Test Database Connection',
+				},
+			});
+			client.api.applications(client.user.id).guilds(message.guild.id).commands.post({
+				data: {
+					name: 'test',
+					description: 'Test Slash Command',
+				},
+			});
+
+			message.reply('Done!');
+		} else if (cont[0] === 'removeSlashCommands') {
+			client.api.applications(client.user.id).guilds(message.guild.id).commands.get()
+				.then((res) => {
+					for (let i = 0; i < res.length; i += 1) {
+						console.log(`Deleting Slash Command "${res[i].name}" (ID: ${res[i].id})`);
+						client.api.applications(client.user.id).guilds(message.guild.id).commands(res[i].id).delete();
+					}
+					message.reply('Done!');
+				});
+		} else if (cont[0] === 'getSlashCommands') {
+			let slashCmds = '\n';
+			client.api.applications(client.user.id).guilds(message.guild.id).commands.get()
+				.then((res) => {
+					for (let i = 0; i < res.length; i += 1) {
+						slashCmds += `/${res[i].name}\n`;
+					}
+					message.reply(`Currently registered guild slash commands:${slashCmds}`);
+				});
+		}
+	}
+});
+
+// Slash Command Handler
+// eslint-disable-next-line consistent-return
+client.ws.on('INTERACTION_CREATE', async (interaction) => {
+	if (interaction.type === 1) {
+		return client.api.interactions(interaction.id, interaction.token)
+			.callback
+			.post({ data: { type: 1 } });
+	}
+	// eslint-disable-next-line consistent-return
+	if (interaction.type !== 2) return;
+
+	if (interaction.data.name === 'test') {
+		client.api.interactions(interaction.id, interaction.token)
+			.callback
+			.post({ data: { type: 5 } });
+
+		new Discord.WebhookClient(client.user.id, interaction.token).editMessage('@original', 'It Works.');
+	}
+	if (interaction.data.name === 'testdb') {
+		client.api.interactions(interaction.id, interaction.token)
+			.callback
+			.post({ data: { type: 5 } });
+		client.api.webhooks(client.user.id, interaction.token).messages('@original').get()
+			.then((res) => {
+				new Poll({
+					discordMessageId: `${res.id}`,
+					users: ['391379592981774337', '433816530862604291'],
+				}).save();
+			});
+		new Discord.WebhookClient(client.user.id, interaction.token).editMessage('@original', 'It Works.');
+	}
+});
+
+client.login(config.discord.token);
