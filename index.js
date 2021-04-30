@@ -2,8 +2,10 @@
 /* eslint-disable max-len */
 /* eslint-disable no-console */
 // Imports
+const fs = require('fs');
 const Discord = require('discord.js');
 const mongoose = require('mongoose');
+const initslashcommands = require('./util/InitSlashCommands.js');
 
 // Config
 const config = require('./config.json');
@@ -22,68 +24,80 @@ const client = new Discord.Client({
 });
 exports.client = client;
 
-// Models
-const Poll = require('./models/Poll.js');
-
 // Init
-client.on('ready', () => {
-	client.user.setActivity('VIVA HAPPY! - Yozora Mel cover', { type: 'LISTENING' });
-	console.log('READY');
-});
-
 database.on('open', () => {
 	console.log('Connected to database');
+});
+
+// Functions
+// loadcmds() based off of function of the same name from GitHub/HoloRes/suisei/index.js
+function loadcmds() {
+	client.devPrefixCommands.forEach((cmd) => {
+		client.devPrefixCommands.delete(cmd.config.command);
+		delete require.cache[require.resolve(`./commands/prefix/dev/${cmd.config.command}.js`)];
+	});
+	fs.readdir('./commands/prefix/dev', (err, files) => {
+		if (err) throw (err);
+		const jsfiles = files.filter((f) => f.split('.').pop() === 'js');
+		if (jsfiles.length <= 0) {
+			console.log('No dev commands found');
+		}
+		jsfiles.forEach((f) => {
+			delete require.cache[require.resolve(`./commands/prefix/dev/${f}`)];
+			// eslint-disable-next-line global-require,import/no-dynamic-require
+			const cmd = require(`./commands/prefix/dev/${f}`);
+			client.devPrefixCommands.set(cmd.config.command, cmd);
+		});
+	});
+	fs.readdir('./commands/slash/dev', (err, files) => {
+		if (err) throw (err);
+		const slashFiles = files.filter((f) => f.split('.').pop() === 'js');
+		if (slashFiles.length <= 0) {
+			console.log('No slash commands found');
+		}
+		slashFiles.forEach((f) => {
+			delete require.cache[require.resolve(`./commands/slash/dev/${f}`)];
+			// eslint-disable-next-line global-require,import/no-dynamic-require
+			const cmd = require(`./commands/slash/dev/${f}`);
+			if (cmd.config.type === 'global') {
+				initslashcommands.initGlobalSlashCommand(client, cmd);
+				client.devGlobalSlashCommands.set(cmd.config.command, cmd);
+			} else {
+				delete require.cache[require.resolve(`./commands/slash/dev/${f}`)];
+			}
+		});
+	});
+}
+
+// Discord Bot
+client.on('ready', () => {
+	client.user.setActivity('VIVA HAPPY! - Yozora Mel cover', { type: 'LISTENING' });
+	client.devPrefixCommands = new Discord.Collection();
+	client.devGlobalSlashCommands = new Discord.Collection();
+	client.devGuildSlashCommands = new Discord.Collection();
+	loadcmds();
+	console.log('Bot Ready');
 });
 
 // Command Handler
 client.on('message', (message) => {
 	if (message.author.bot) return;
 	if (message.content.startsWith(config.discord.devPrefix)) {
-		if (message.author.id !== '433816530862604291') {
+		if (message.author.id !== config.discord.devUserId) {
 			return message.reply('You do not have permission to use this command.');
 		}
 		const cont = message.content.slice(config.discord.devPrefix.length).split(' ');
+		const args = cont.slice(1).join(' ').trim().split(' ');
 
-		if (cont[0] === 'initSlashCommands') {
-			client.api.applications(client.user.id).guilds(message.guild.id).commands.post({
-				data: {
-					name: 'testdb',
-					description: 'Test Database Connection',
-				},
-			});
-			client.api.applications(client.user.id).guilds(message.guild.id).commands.post({
-				data: {
-					name: 'test',
-					description: 'Test Slash Command',
-				},
-			});
-
-			message.reply('Done!');
-		} else if (cont[0] === 'removeSlashCommands') {
-			client.api.applications(client.user.id).guilds(message.guild.id).commands.get()
-				.then((res) => {
-					for (let i = 0; i < res.length; i += 1) {
-						console.log(`Deleting Slash Command "${res[i].name}" (ID: ${res[i].id})`);
-						client.api.applications(client.user.id).guilds(message.guild.id).commands(res[i].id).delete();
-					}
-					message.reply('Done!');
-				});
-		} else if (cont[0] === 'getSlashCommands') {
-			let slashCmds = '\n';
-			client.api.applications(client.user.id).guilds(message.guild.id).commands.get()
-				.then((res) => {
-					for (let i = 0; i < res.length; i += 1) {
-						slashCmds += `/${res[i].name}\n`;
-					}
-					message.reply(`Currently registered guild slash commands:${slashCmds}`);
-				});
-		}
+		const cmd = client.devPrefixCommands.get(cont[0]);
+		if (cmd) return cmd.run(client, message, args);
 	}
 });
 
 // Slash Command Handler
 // eslint-disable-next-line consistent-return
 client.ws.on('INTERACTION_CREATE', async (interaction) => {
+	console.log(interaction);
 	if (interaction.type === 1) {
 		return client.api.interactions(interaction.id, interaction.token)
 			.callback
@@ -92,26 +106,10 @@ client.ws.on('INTERACTION_CREATE', async (interaction) => {
 	// eslint-disable-next-line consistent-return
 	if (interaction.type !== 2) return;
 
-	if (interaction.data.name === 'test') {
-		client.api.interactions(interaction.id, interaction.token)
-			.callback
-			.post({ data: { type: 5 } });
+	const cont = interaction.data.name;
 
-		new Discord.WebhookClient(client.user.id, interaction.token).editMessage('@original', 'It Works.');
-	}
-	if (interaction.data.name === 'testdb') {
-		client.api.interactions(interaction.id, interaction.token)
-			.callback
-			.post({ data: { type: 5 } });
-		client.api.webhooks(client.user.id, interaction.token).messages('@original').get()
-			.then((res) => {
-				new Poll({
-					discordMessageId: `${res.id}`,
-					users: ['391379592981774337', '433816530862604291'],
-				}).save();
-			});
-		new Discord.WebhookClient(client.user.id, interaction.token).editMessage('@original', 'It Works.');
-	}
+	const cmd = client.devGuildSlashCommands.get(cont);
+	if (cmd) return cmd.response(Discord, client, interaction);
 });
 
 client.login(config.discord.token);

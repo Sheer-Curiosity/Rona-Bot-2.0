@@ -1,0 +1,17 @@
+{
+	"discord": {
+		"token": "",
+		"prefix": "",
+		"devPrefix": "",
+		"ownerUserId": "",
+		"devRoleId": "",
+		"adminRoleId": ""
+	},
+	"mongoDb": {
+		"host": "",
+		"username": "",
+		"password": "",
+		"database": ""
+	},
+	"apexApi": ""
+}
