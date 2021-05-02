@@ -71,7 +71,7 @@ function loadcmds() {
 
 // Discord Bot
 client.on('ready', () => {
-	client.user.setActivity('VIVA HAPPY! - Yozora Mel cover', { type: 'LISTENING' });
+	client.user.setActivity('Various Hololive Covers', { type: 'LISTENING' });
 	client.devPrefixCommands = new Discord.Collection();
 	client.devGlobalSlashCommands = new Discord.Collection();
 	client.devGuildSlashCommands = new Discord.Collection();

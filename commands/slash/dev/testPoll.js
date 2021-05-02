@@ -5,8 +5,8 @@ const RolePoll = require('../../../models/RolePoll.js');
 const ServerPoll = require('../../../models/ServerPoll.js');
 
 exports.data = {
-	name: 'testdb',
-	description: 'Test Database Connection',
+	name: 'testpoll',
+	description: 'Test Poll',
 	default_permission: false,
 	options: [
 		{
@@ -41,10 +41,6 @@ exports.permissions = {
 };
 
 exports.response = (Discord, client, interaction) => {
-	client.api.interactions(interaction.id, interaction.token)
-		.callback
-		.post({ data: { type: 5 } });
-
 	if (interaction.data.options[0].name === 'server') {
 		client.api.webhooks(client.user.id, interaction.token).messages('@original').get()
 			.then((res) => {
@@ -54,6 +50,13 @@ exports.response = (Discord, client, interaction) => {
 					pollStyle: 1,
 				}).save();
 			});
+
+		const pollEmbed = new Discord.MessageEmbed()
+			.setTitle('Test Server Poll')
+			.setDescription('Test Server Poll Description')
+			.setFooter('Please Help Me Programming Is Pain');
+
+		new Discord.WebhookClient(client.user.id, interaction.token).send(pollEmbed);
 	}
 	if (interaction.data.options[0].name === 'role') {
 		client.api.webhooks(client.user.id, interaction.token).messages('@original').get()
@@ -70,13 +73,22 @@ exports.response = (Discord, client, interaction) => {
 					pendingVoters: users,
 					submittedVoters: [],
 				}).save();
+
+				const pollEmbed = new Discord.MessageEmbed()
+					.setTitle('Test Role Poll')
+					.setDescription('Test Role Poll Description')
+					.setFooter('Please Help Me Programming Is Pain')
+					.addFields(
+						{ name: 'Ping', value: `<@${interaction.member.user.id}>` },
+					);
+
+				new Discord.WebhookClient(client.user.id, interaction.token).send('Poll For <@433816530862604291>', pollEmbed);
+				new Discord.WebhookClient(client.user.id, interaction.token).send('Poll For <@433816530862604291>');
 			});
 	}
-
-	new Discord.WebhookClient(client.user.id, interaction.token).editMessage('@original', 'It Works.');
 };
 
 exports.config = {
 	type: 'guild',
-	command: 'testdb',
+	command: 'testpoll',
 };
