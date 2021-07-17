@@ -15,5 +15,6 @@ module.exports = {
 		indent: [2, 'tab'],
 		'no-tabs': 0,
 		'no-underscore-dangle': 0, // Disabled as mongoose uses _id
+		'linebreak-style': 0,
 	},
 };
