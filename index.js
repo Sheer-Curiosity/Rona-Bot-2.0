@@ -5,7 +5,7 @@
 const fs = require('fs');
 const Discord = require('discord.js');
 const mongoose = require('mongoose');
-const initslashcommands = require('./util/InitSlashCommands.js');
+const initslashcommands = require('./util/InitSlashCommands');
 
 // Config
 const config = require('./config.json');
@@ -19,7 +19,7 @@ const database = mongoose.createConnection(`mongodb+srv://${config.mongoDb.usern
 exports.database = database;
 
 const client = new Discord.Client({
-	partials: ['GUILD_MEMBER', 'MESSAGE', 'REACTION'],
+	partials: ['USER', 'GUILD_MEMBER', 'MESSAGE', 'REACTION'],
 	intents: ['GUILDS', 'GUILD_INTEGRATIONS', 'GUILD_MESSAGES', 'GUILD_MESSAGE_REACTIONS'],
 });
 exports.client = client;
@@ -80,7 +80,7 @@ client.on('ready', () => {
 });
 
 // Command Handler
-client.on('message', (message) => {
+client.on('messageCreate', (message) => {
 	if (message.author.bot) return;
 	if (message.content.startsWith(config.discord.devPrefix)) {
 		if (message.author.id !== config.discord.devUserId) {
@@ -94,7 +94,7 @@ client.on('message', (message) => {
 	}
 });
 
-// Slash Command Handler
+// Slash Command & Button Handler
 // eslint-disable-next-line consistent-return
 client.ws.on('INTERACTION_CREATE', async (interaction) => {
 	console.log(interaction);
@@ -104,12 +104,18 @@ client.ws.on('INTERACTION_CREATE', async (interaction) => {
 			.post({ data: { type: 1 } });
 	}
 	// eslint-disable-next-line consistent-return
-	if (interaction.type !== 2) return;
+	if (interaction.type === 2) {
+		const cont = interaction.data.name;
 
-	const cont = interaction.data.name;
+		const cmd = client.devGuildSlashCommands.get(cont);
+		if (cmd) return cmd.response(Discord, client, interaction);
+	}
+	if (interaction.type === 3) {
+		const cont = interaction.data.custom_id.split(':')[0];
 
-	const cmd = client.devGuildSlashCommands.get(cont);
-	if (cmd) return cmd.response(Discord, client, interaction);
+		const cmd = client.devGuildSlashCommands.get(cont);
+		if (cmd) return cmd.buttonHandler(Discord, client, interaction);
+	}
 });
 
 client.login(config.discord.token);
